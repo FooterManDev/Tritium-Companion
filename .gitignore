@@ -1,0 +1,14 @@
+/common/.gradle/
+/common/build/
+/build/
+/.idea/
+/.gradle/
+/fabric/.gradle/
+/fabric/build/
+/fabric/run/
+/common/common.iml
+/fabric/fabric.iml
+/neoforge/neoforge.iml
+/neoforge/.gradle/
+/neoforge/build/
+/neoforge/run/
