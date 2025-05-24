@@ -16,7 +16,7 @@ public class Warning
     public static Component getWarningMsg() {
         return Component.literal(
                 """
-                Tritium Companion is a dev tool for the Tritium program, an Integrated Development Environment for Modpack Developers.
+                Tritium Companion is a dev tool for Modpack Authors using Tritium Launcher.
                 
                 If this warning appears, you likely do not have Tritium installed. This mod is safe to remove.
                 
