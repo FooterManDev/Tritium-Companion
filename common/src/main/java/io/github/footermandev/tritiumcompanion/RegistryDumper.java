@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+@SuppressWarnings("LoggingSimilarMessage")
 public class RegistryDumper
 {
 
@@ -66,6 +67,7 @@ public class RegistryDumper
             Object value = holder.value();
 
             try {
+
                 @SuppressWarnings("unchecked")
                 DataResult<JsonElement> dr = ((Codec<Object>) codec).encodeStart(ops, value);
                 JsonElement json = dr.getOrThrow(err ->
@@ -124,9 +126,7 @@ public class RegistryDumper
                     json.addProperty("replace", false);
 
                     JsonArray values = new JsonArray();
-                    named.forEach(holder -> {
-                        holder.unwrapKey().ifPresent(k -> values.add(k.location().toString()));
-                    });
+                    named.forEach(holder -> holder.unwrapKey().ifPresent(k -> values.add(k.location().toString())));
                     json.add("values", values);
 
                     Files.writeString(out, GSON.toJson(json));
@@ -303,7 +303,7 @@ public class RegistryDumper
             }
         });
 
-        Common.LOGGER.info("Tritium: Items Dumped: {}", items.size());
+        Common.LOGGER.info("Tritium: Items Dumped: {}", count.get());
         return count.get();
     }
 }
