@@ -16,20 +16,23 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.TieredItem;
+import net.minecraft.world.item.crafting.*;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 @SuppressWarnings("LoggingSimilarMessage")
@@ -39,6 +42,58 @@ public class RegistryDumper
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
             .create();
+
+    static long calculateDirSize(Path dir) {
+        AtomicLong size = new AtomicLong(0);
+        try(Stream<Path> paths = Files.walk(dir)) {
+            paths.filter(Files::isRegularFile)
+                    .forEach(path -> {
+                        try {
+                            size.addAndGet(Files.size(path));
+                        } catch (IOException e) {
+                            Common.LOGGER.warn("Failed to get size of file: {}", path, e);
+                        }
+                    });
+        } catch (IOException e) {
+            Common.LOGGER.error("Failed to calculate directory size", e);
+        }
+        return size.get();
+    }
+
+    static String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp - 1) + "B";
+        return String.format("%.2f %s", bytes / Math.pow(1024, exp), pre);
+    }
+
+    static String formatElapsedTime(long millis) {
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+
+        if (hours > 0) {
+            return String.format("%dh %dm %ds", hours, minutes % 60, seconds % 60);
+        } else if (minutes > 0) {
+            return String.format("%dm %ds", minutes, seconds % 60);
+        } else {
+            return String.format("%.3fs", millis / 1000.0);
+        }
+    }
+
+    public static void printDumpSummary(Path registryObjsPath, long startTime, int objectCount) {
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        long directorySize = calculateDirSize(registryObjsPath);
+
+        Common.LOGGER.info("=");
+        Common.LOGGER.info("Completed Registry Dump");
+        Common.LOGGER.info("=");
+        Common.LOGGER.info("Time Elapsed: {}", formatElapsedTime(elapsedTime));
+        Common.LOGGER.info("Object Count: {}", objectCount);
+        Common.LOGGER.info("Total Size: {}", formatBytes(directorySize));
+        Common.LOGGER.info("Output Path: {}", registryObjsPath.toAbsolutePath());
+        Common.LOGGER.info("=");
+    }
 
     public static <T> int dumpRegistry(
             MinecraftServer server,
@@ -82,7 +137,6 @@ public class RegistryDumper
                 Files.createDirectories(out.getParent());
                 Files.writeString(out, GSON.toJson(json));
 
-                Common.LOGGER.info("Dumped {} {}:", subPath, id);
                 count.incrementAndGet();
             } catch (IOException e) {
                 Common.LOGGER.error("I/O error writing {} {}:", subPath, id, e);
@@ -130,7 +184,6 @@ public class RegistryDumper
                     json.add("values", values);
 
                     Files.writeString(out, GSON.toJson(json));
-                    Common.LOGGER.info("Dumped tag {}:{}", registryPath, tagId);
                     count.incrementAndGet();
                 } catch (IOException e) {
                     Common.LOGGER.error("Failed dumping tag {}:{}", registryPath, tagId, e);
@@ -163,7 +216,6 @@ public class RegistryDumper
                 Files.createDirectories(out.getParent());
                 Files.writeString(out, GSON.toJson(json));
 
-                Common.LOGGER.info("Dumped recipe {}", id);
                 count.incrementAndGet();
             } catch (IOException e) {
                 Common.LOGGER.error("I/O error writing recipe {}:", id, e);
@@ -176,7 +228,8 @@ public class RegistryDumper
         return count.get();
     }
 
-    public static int dumpTextures(ResourceManager mngr) {
+    public static int dumpTextures() {
+        ResourceManager mngr = Minecraft.getInstance().getResourceManager();
         Path outDir = Path.of(Minecraft.getInstance().gameDirectory.toString(), "registryObjs/textures");
 
         Map<ResourceLocation, Resource> resources = mngr.listResources("textures", path -> path.getPath().endsWith(".png"));
@@ -185,19 +238,21 @@ public class RegistryDumper
 
         resources.forEach((id, resource) -> {
             try (InputStream in = resource.open()) {
-                Path relative = Path.of(id.getPath());
-                int skipCount = Path.of("textures").getNameCount();
-                Path trimmed = relative.subpath(skipCount, relative.getNameCount());
+                String fullPath = id.getPath();
+
+                String relativePath = fullPath;
+                if(relativePath.startsWith("textures/")) {
+                    relativePath = relativePath.substring("textures/".length());
+                }
 
                 if(id.getNamespace().equals("realms")) return; // No need to include Realms images
 
                 Path out = outDir
                         .resolve(id.getNamespace())
-                        .resolve(trimmed);
+                        .resolve(relativePath);
 
                 Files.createDirectories(out.getParent());
                 Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
-                Common.LOGGER.info("Dumped texture {}", id);
                 count.getAndIncrement();
             } catch (IOException e) {
                 Common.LOGGER.error("Failed to dump texture: {}", id, e);
@@ -228,7 +283,6 @@ public class RegistryDumper
                 Files.createDirectories(out.getParent());
                 Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
                 count.getAndIncrement();
-                Common.LOGGER.info("Dumped {} {}", outputName, rl);
             } catch (IOException e) {
                 Common.LOGGER.error("Failed to dump {} {}:", outputName, rl, e);
             }
@@ -258,7 +312,6 @@ public class RegistryDumper
                 Files.createDirectories(out.getParent());
                 Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
                 count.getAndIncrement();
-                Common.LOGGER.info("Dumped {} {}", outputName, rl);
             } catch (IOException e) {
                 Common.LOGGER.error("Failed to dump {} {}:", outputName, rl, e);
             }
@@ -282,11 +335,31 @@ public class RegistryDumper
                 JsonObject json = new JsonObject();
                 ItemStack stack = new ItemStack(item);
                 json.addProperty("id", id.toString());
-                json.addProperty("translationKey", item.getDescriptionId());
+                json.addProperty("displayName", stack.getHoverName().getString());
                 json.addProperty("maxCount", stack.getMaxStackSize());
                 json.addProperty("maxDamage", stack.getMaxDamage());
                 json.addProperty("rarity", stack.getRarity().toString());
                 json.addProperty("enchantability", item.getEnchantmentValue());
+
+                if(item instanceof TieredItem tItem) {
+                    JsonObject tierInfo = new JsonObject();
+
+                    tierInfo.addProperty("tier", tItem.getTier().toString());
+                    tierInfo.addProperty("uses", tItem.getTier().getUses());
+                    tierInfo.addProperty("speed", tItem.getTier().getSpeed());
+                    tierInfo.addProperty("attackDamageBonus", tItem.getTier().getAttackDamageBonus());
+                    json.add("toolTier", tierInfo);
+                }
+
+                if(item instanceof ArmorItem aItem) {
+                    JsonObject armorInfo = new JsonObject();
+
+                    armorInfo.addProperty("defence", aItem.getDefense());
+                    armorInfo.addProperty("toughness", aItem.getToughness());
+                    armorInfo.addProperty("type", aItem.getType().getName());
+                    armorInfo.addProperty("slot", aItem.getEquipmentSlot().getName());
+                    json.add("armorProperties", armorInfo);
+                }
 
                 Path out = outDir
                         .resolve(id.getNamespace())
@@ -295,7 +368,6 @@ public class RegistryDumper
                 Files.createDirectories(out.getParent());
                 Files.writeString(out, GSON.toJson(json));
                 count.getAndIncrement();
-                Common.LOGGER.info("Dumped {}", id);
             } catch (IOException e) {
                 Common.LOGGER.error("I/O error writing: {}:", id, e);
             } catch (RuntimeException e) {
@@ -304,6 +376,89 @@ public class RegistryDumper
         });
 
         Common.LOGGER.info("Tritium: Items Dumped: {}", count.get());
+        return count.get();
+    }
+
+    public static int dumpRecipeTypes(MinecraftServer server) {
+        Path outDir = server.getFile("registryObjs").toAbsolutePath().resolve("recipe_types");
+        Registry<RecipeType<?>> recipeTypes = server.registryAccess().registryOrThrow(Registries.RECIPE_TYPE);
+        RecipeManager recipeManager = server.getRecipeManager();
+
+        Map<RecipeType<?>, Recipe<?>> sampleRecipes = new HashMap<>();
+        recipeManager.getRecipes().forEach(recipeHolder -> {
+            RecipeType<?> type = recipeHolder.value().getType();
+            sampleRecipes.putIfAbsent(type, recipeHolder.value());
+        });
+
+        AtomicInteger count = new AtomicInteger();
+
+        recipeTypes.forEach(recipeType -> {
+            ResourceLocation id = recipeTypes.getKey(recipeType);
+            assert id != null;
+
+            try {
+                JsonObject json = new JsonObject();
+                json.addProperty("id", id.toString());
+
+                Recipe<?> sample = sampleRecipes.get(recipeType);
+
+                if(sample != null) {
+                    int inputSlots  = 0;
+                    int fuelSlots   = 0;
+                    int outputSlots = 0;
+                    int inputTanks  = 0;
+                    int outputTanks = 0;
+                    int energyCells = 0;
+
+                    switch (sample) {
+                        case CraftingRecipe ignored -> {
+                            inputSlots = 9;
+                            outputSlots = 1;
+                        }
+                        case AbstractCookingRecipe ignored -> {
+                            inputSlots = 1;
+                            fuelSlots = 1;
+                            outputSlots = 1;
+                        }
+                        case SmithingRecipe ignored -> {
+                            inputSlots = 3;
+                            outputSlots = 1;
+                        }
+                        case StonecutterRecipe ignored -> inputSlots = 1;
+                        default -> inputSlots = sample.getIngredients().size();
+                    }
+
+                    json.addProperty("inputSlots", inputSlots);
+                    json.addProperty("fuelSlots", fuelSlots);
+                    json.addProperty("outputSlots", outputSlots);
+                    json.addProperty("inputTanks", inputTanks);
+                    json.addProperty("outputTanks", outputTanks);
+                    json.addProperty("energyCells", energyCells);
+                } else {
+                    json.addProperty("inputSlots", 0);
+                    json.addProperty("fuelSlots", 0);
+                    json.addProperty("outputSlots", 0);
+                    json.addProperty("inputTanks", 0);
+                    json.addProperty("outputTanks", 0);
+                    json.addProperty("energyCells", 0);
+                    json.addProperty("note", "No recipes registered");
+                }
+
+                Path out = outDir
+                        .resolve(id.getNamespace())
+                        .resolve(id.getPath() + ".json");
+
+                Files.createDirectories(out.getParent());
+                Files.writeString(out, GSON.toJson(json));
+                count.getAndIncrement();
+            } catch (IOException e) {
+                Common.LOGGER.error("I/O error writing recipe type {}:", id, e);
+            } catch (RuntimeException e) {
+                Common.LOGGER.error("Failed dumping recipe type {}:", id, e);
+            }
+        });
+
+        Common.LOGGER.info("Tritium: Recipe Types Dumped: {}", count.get());
         return count.get();
     }
 }
