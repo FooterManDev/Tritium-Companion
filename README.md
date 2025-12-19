@@ -6,8 +6,7 @@ Current features:
  TODO:
  * Add support for managing game sessions in Tritium, including Reload support.
 
-
- ###
+---
 
  Included in this repo is [Tritium-Mod-API](https://github.com/FooterManDev/Tritium-Companion/tree/1.21.1-neo-fabric/Tritium-Mod-API) for Mods to implement.
 
