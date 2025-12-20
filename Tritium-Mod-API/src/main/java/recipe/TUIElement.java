@@ -1,18 +1,49 @@
 package recipe;
 
+/**
+ * A single UI element within a recipe GUI.
+ *
+ * @see TUILayout
+ */
 public interface TUIElement
 {
-    String getType();
+    /**
+     * Gets the type identifier for this UI element.
+     * @return The element type string
+     */
+    String type();
 
-    int getX();
+    /**
+     * Gets the X coordinate of this element on the texture.
+     * @return The X coordinate in pixels
+     */
+    int x();
 
-    int getY();
+    /**
+     * Gets the Y coordinate of this element on the texture.
+     * @return The Y coordinate in pixels
+     */
+    int y();
 
-    int getWidth();
+    /**
+     * Gets the width of this element in pixels.
+     *
+     * @return The width in pixels
+     */
+    int width();
 
-    int getHeight();
+    /**
+     * Gets the height of this element in pixels.
+     *
+     * @return The height in pixels
+     */
+    int height();
 
-    default String getAnimDirection() {
+    /**
+     * Gets the animation direction for this element.
+     * @return The animation direction
+     */
+    default String animDirection() {
         return "HORIZONTAL";
     }
 }

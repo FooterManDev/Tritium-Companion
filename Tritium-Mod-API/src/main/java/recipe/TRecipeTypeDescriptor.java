@@ -2,7 +2,9 @@ package recipe;
 
 import util.TJsonAdapter;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -16,24 +18,34 @@ public interface TRecipeTypeDescriptor
     String getRecipeTypeId();
 
     /**
+     * Gets all components that define this recipe type.
      * @return List of all ingredient slots/tanks
+     * @see TRecipeComponent
      */
-    List<TIngredientSlot> getInputs();
+    List<TRecipeComponent> getComponents();
 
-    /*
-     * @return List of all output slots/tanks
+    /**
+     * @return The texture path
      */
-    List<TOutputSlot> getOutputs();
-
-    Optional<TEnergyRequirement> getEnergyRequirement();
-
     String getUITexture();
 
+    /**
+     * @return The UI layout
+     * @see TUILayout
+     */
     TUILayout getUILayout();
 
+    /**
+     * @return An Optional of the JSON adapter or empty
+     * @see TJsonAdapter
+     */
     default Optional<TJsonAdapter> getRecipeJsonAdapter() { return Optional.empty(); }
 
-    default Optional<TRecipeProperties> getProperties() {
-        return Optional.empty();
+    /**
+     * Gets additional metadata for this recipe type.
+     * @return Map of metadata
+     */
+    default Map<String, Object> getMetadata() {
+        return Collections.emptyMap();
     }
 }

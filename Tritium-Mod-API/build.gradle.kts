@@ -1,13 +1,14 @@
 plugins {
     `java-library`
-    `maven-publish`
     signing
+    id("com.vanniktech.maven.publish") version "0.35.0"
 }
 
 group = "io.github.footermandev"
-version = "0.1.0"
+val artifactId = "tritium-mod-api"
+version = "0.1.1"
 
-java { withJavadocJar(); withSourcesJar() }
+java { withSourcesJar() }
 
 repositories {
     mavenCentral()
@@ -18,18 +19,30 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
-            pom {
-                name.set("Tritium Mod API")
-                description.set("API for Tritium Launcher integration")
-                url.set("https://github.com/FooterManDev/Tritium-Companion")
-                licenses { licenses { name.set("MIT"); url.set("https://opensource.org/licenses/MIT") } }
-                developers { developer { name.set("FooterManDev") } }
-                scm { connection.set("scm:git:git://github.com/FooterManDev/Tritium-Companion.git") }
+mavenPublishing {
+    coordinates(group.toString(), artifactId, version.toString())
+    pom {
+        name = "Tritium Mod API"
+        description = "API for Tritium Launcher integration"
+        inceptionYear = "2025"
+        url = "https://github.com/FooterManDev/Tritium-Companion"
+        licenses {
+            license {
+                name = "MIT"
+                url = "https://opensource.org/licenses/MIT"
             }
+        }
+        developers {
+            developer {
+                id = "footermandev"
+                name = "FooterManDev"
+                url = "https://github.com/FooterManDev"
+            }
+        }
+        scm {
+            url = "https://github.com/FooterManDev/Tritium-Companion"
+            connection = "scm:git:git://github.com/FooterManDev/Tritium-Companion.git"
+            developerConnection = "scm:git:ssh://git@github.com/FooterManDev/Tritium-Companion.git"
         }
     }
 
@@ -45,3 +58,15 @@ publishing {
     }
 }
 
+tasks.matching { it.name == "generateMetadataFileForMavenPublication" }.configureEach {
+    dependsOn(tasks.matching { it.name == "plainJavadocJar" || it.name == "javadocJar" })
+}
+
+afterEvaluate {
+    publishing.publications.withType(MavenPublication::class.java).forEach { pub ->
+        println("Publication '${pub.name}':")
+        pub.artifacts.forEach { a ->
+            println("  - extension='${a.extension}', classifier='${a.classifier}', file='${a.file?.name}'")
+        }
+    }
+}
