@@ -1,17 +1,17 @@
 modLoader = "javafml"
 loaderVersion = "[4,)"
-#issueTrackerURL = ""
-license = "Insert License Here"
+issueTrackerURL = "https://github.com/Tritium-Launcher/Tritium-Companion"
+license = "MIT"
 
 [[mods]]
 modId = "tritiumcompanion"
 version = "${version}"
-displayName = "TritiumCompanion"
-authors = "Me!"
+displayName = "Tritium Companion"
+authors = "FooterManDev"
 description = '''
-This is an example description! Tell everyone what your mod is about!
+Provides utilities for Tritium, including network operations and registry dumping.
 '''
-#logoFile = ""
+logoFile = "icon.png"
 
 [[dependencies.tritiumcompanion]]
 modId = "neoforge"

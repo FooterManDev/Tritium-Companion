@@ -8,7 +8,16 @@ group = "io.github.footermandev"
 val artifactId = "tritium-mod-api"
 version = "0.1.1"
 
-java { withSourcesJar() }
+java {
+    withSourcesJar()
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
+}
 
 repositories {
     mavenCentral()

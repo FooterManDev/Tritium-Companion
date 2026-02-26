@@ -229,18 +229,19 @@ public class RegistryDumper
     }
 
     public static int dumpTextures() {
-        ResourceManager mngr = Minecraft.getInstance().getResourceManager();
-        Path outDir = Path.of(Minecraft.getInstance().gameDirectory.toString(), "registryObjs/textures");
+        return dumpTextures(Minecraft.getInstance().getResourceManager());
+    }
 
+    public static int dumpTextures(ResourceManager mngr) {
+        Path outDir = Path.of(Minecraft.getInstance().gameDirectory.toString(), "registryObjs/textures");
         Map<ResourceLocation, Resource> resources = mngr.listResources("textures", path -> path.getPath().endsWith(".png"));
 
         AtomicInteger count = new AtomicInteger();
 
         resources.forEach((id, resource) -> {
             try (InputStream in = resource.open()) {
-                String fullPath = id.getPath();
 
-                String relativePath = fullPath;
+                String relativePath = id.getPath();
                 if(relativePath.startsWith("textures/")) {
                     relativePath = relativePath.substring("textures/".length());
                 }
@@ -259,7 +260,7 @@ public class RegistryDumper
             }
         });
 
-        Common.LOGGER.info("Dumped {} texture files.", count);
+        Common.LOGGER.info("Dumped {} texture files.", count.get());
         return count.get();
     }
 

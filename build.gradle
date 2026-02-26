@@ -13,6 +13,12 @@ allprojects {
     version = rootProject.mod_version
 }
 
+ext {
+    companionBundledLibraries = [
+            "org.java-websocket:Java-WebSocket:1.6.0"
+    ]
+}
+
 subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'

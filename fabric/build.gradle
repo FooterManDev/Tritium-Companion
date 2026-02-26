@@ -2,6 +2,10 @@ plugins {
     id 'com.gradleup.shadow'
 }
 
+def bundledLibraries = rootProject.ext.has("companionBundledLibraries")
+        ? rootProject.ext.companionBundledLibraries
+        : []
+
 architectury {
     platformSetupLoomIde()
     fabric()
@@ -29,6 +33,12 @@ dependencies {
 
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
+
+    bundledLibraries.each { dep ->
+        implementation dep
+        runtimeOnly dep
+        shadowBundle(dep) { transitive = false }
+    }
 
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
