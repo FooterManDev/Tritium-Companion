@@ -48,6 +48,7 @@ public interface TSlotComponent extends TRecipeComponent
     default Map<String, Object> getData() {
         Map<String, Object> data = new HashMap<>();
         data.put("slotType", getSlotType());
+        data.put("valueType", getSlotType().toLowerCase());
         data.put("isInput", isInput());
         data.put("maxCapacity", getMaxCapacity());
         data.put("displayName", getDisplayName());

@@ -4,9 +4,9 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.35.0"
 }
 
-group = "io.github.footermandev"
+group = "io.github.tritium_launcher"
 val artifactId = "tritium-mod-api"
-version = "0.1.1"
+version = "0.1.2"
 
 java {
     withSourcesJar()
@@ -43,7 +43,7 @@ mavenPublishing {
         }
         developers {
             developer {
-                id = "footermandev"
+                id = "tritium_launcher"
                 name = "FooterManDev"
                 url = "https://github.com/FooterManDev"
             }

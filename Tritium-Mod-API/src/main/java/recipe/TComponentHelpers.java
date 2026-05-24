@@ -20,13 +20,35 @@ public class TComponentHelpers
         private final boolean isInput;
         private final long maxCapacity;
         private final String displayName;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
 
         public Slot(String slotType, String slotId, boolean isInput, long maxCapacity, String displayName) {
+            this(slotType, slotId, isInput, maxCapacity, displayName, 0, 0, 18, 18);
+        }
+
+        public Slot(
+                String slotType,
+                String slotId,
+                boolean isInput,
+                long maxCapacity,
+                String displayName,
+                int x,
+                int y,
+                int width,
+                int height
+        ) {
             this.slotType = slotType;
             this.slotId = slotId;
             this.isInput = isInput;
             this.maxCapacity = maxCapacity;
             this.displayName = displayName;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
         }
 
         /**
@@ -68,7 +90,21 @@ public class TComponentHelpers
          * Sets a custom display name.
          */
         public Slot withDisplayName(String name) {
-            return new Slot(slotType, slotId, isInput, maxCapacity, name);
+            return new Slot(slotType, slotId, isInput, maxCapacity, name, x, y, width, height);
+        }
+
+        /**
+         * Sets render bounds on the recipe background.
+         */
+        public Slot at(int x, int y) {
+            return new Slot(slotType, slotId, isInput, maxCapacity, displayName, x, y, width, height);
+        }
+
+        /**
+         * Sets render bounds on the recipe background.
+         */
+        public Slot bounds(int x, int y, int width, int height) {
+            return new Slot(slotType, slotId, isInput, maxCapacity, displayName, x, y, width, height);
         }
 
         @Override
@@ -95,6 +131,26 @@ public class TComponentHelpers
         public String getDisplayName() {
             return displayName;
         }
+
+        @Override
+        public int x() {
+            return x;
+        }
+
+        @Override
+        public int y() {
+            return y;
+        }
+
+        @Override
+        public int width() {
+            return width;
+        }
+
+        @Override
+        public int height() {
+            return height;
+        }
     }
 
     /**
@@ -104,10 +160,22 @@ public class TComponentHelpers
     {
         private final String energyType;
         private final long amount;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
 
         public GenericEnergy(String energyType, long amount) {
+            this(energyType, amount, 0, 0, 18, 18);
+        }
+
+        public GenericEnergy(String energyType, long amount, int x, int y, int width, int height) {
             this.energyType = energyType;
             this.amount = amount;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
         }
 
         /**
@@ -147,45 +215,66 @@ public class TComponentHelpers
         public long getAmountPerOperation() {
             return amount;
         }
-    }
 
-    /**
-     * Generic Duration component impl.
-     */
-    public static class GenericDuration implements TDurationComponent
-    {
-        private final int duration;
-
-        public GenericDuration(int duration) {
-            this.duration = duration;
-        }
-
-        /**
-         * Creates a duration in ticks.
-         */
-        public static GenericDuration ticks(int ticks) {
-            return new GenericDuration(ticks);
-        }
-
-        /**
-         * Creates a duration in seconds.
-         */
-        public static GenericDuration seconds(int seconds) {
-            return new GenericDuration(seconds * 20);
-        }
-
-        /**
-         * Creates a duration in minutes.
-         */
-        public static GenericDuration minutes(int minutes) {
-            return new GenericDuration(minutes * 20 * 60);
+        public GenericEnergy bounds(int x, int y, int width, int height) {
+            return new GenericEnergy(energyType, amount, x, y, width, height);
         }
 
         @Override
-        public int getDuration() {
-            return duration;
+        public int x() {
+            return x;
+        }
+
+        @Override
+        public int y() {
+            return y;
+        }
+
+        @Override
+        public int width() {
+            return width;
+        }
+
+        @Override
+        public int height() {
+            return height;
         }
     }
+
+        /**
+         * Generic Duration component impl.
+         */
+        public record GenericDuration(int duration, int x, int y, int width, int height) implements TDurationComponent
+        {
+            public GenericDuration(int duration) {
+                this(duration, 0, 0, 18, 18);
+            }
+
+            /**
+             * Creates a duration in ticks.
+             */
+            public static GenericDuration ticks(int ticks) {
+                return new GenericDuration(ticks);
+            }
+
+            /**
+             * Creates a duration in seconds.
+             */
+            public static GenericDuration seconds(int seconds) {
+                return new GenericDuration(seconds * 20);
+            }
+
+            /**
+             * Creates a duration in minutes.
+             */
+            public static GenericDuration minutes(int minutes) {
+                return new GenericDuration(minutes * 20 * 60);
+            }
+
+            public GenericDuration bounds(int x, int y, int width, int height) {
+                return new GenericDuration(duration, x, y, width, height);
+            }
+        }
 
     /**
      * Custom component impl.
@@ -195,11 +284,23 @@ public class TComponentHelpers
         private final String id;
         private final String category;
         private final Map<String, Object> data;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
 
         public Custom(String id, String category) {
+            this(id, category, 0, 0, 18, 18);
+        }
+
+        public Custom(String id, String category, int x, int y, int width, int height) {
             this.id = id;
             this.category = category;
             this.data = new HashMap<>();
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
         }
 
         /**
@@ -217,6 +318,12 @@ public class TComponentHelpers
             return this;
         }
 
+        public Custom bounds(int x, int y, int width, int height) {
+            Custom custom = new Custom(id, category, x, y, width, height);
+            custom.data.putAll(data);
+            return custom;
+        }
+
         @Override
         public String getCategory() {
             return category;
@@ -230,6 +337,26 @@ public class TComponentHelpers
         @Override
         public Map<String, Object> getData() {
             return new HashMap<>(data);
+        }
+
+        @Override
+        public int x() {
+            return x;
+        }
+
+        @Override
+        public int y() {
+            return y;
+        }
+
+        @Override
+        public int width() {
+            return width;
+        }
+
+        @Override
+        public int height() {
+            return height;
         }
     }
 

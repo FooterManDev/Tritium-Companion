@@ -18,6 +18,13 @@ public interface TRecipeTypeDescriptor
     String getRecipeTypeId();
 
     /**
+     * @return User-facing display name for this recipe type.
+     */
+    default String getDisplayName() {
+        return getRecipeTypeId();
+    }
+
+    /**
      * Gets all components that define this recipe type.
      * @return List of all ingredient slots/tanks
      * @see TRecipeComponent
@@ -42,10 +49,23 @@ public interface TRecipeTypeDescriptor
     default Optional<TJsonAdapter> getRecipeJsonAdapter() { return Optional.empty(); }
 
     /**
+     * @return An Optional adapter that converts runtime recipes into Tritium's display format.
+     */
+    default Optional<TRecipeDumpAdapter> getRecipeDumpAdapter() { return Optional.empty(); }
+
+    /**
      * Gets additional metadata for this recipe type.
      * @return Map of metadata
      */
     default Map<String, Object> getMetadata() {
         return Collections.emptyMap();
+    }
+
+    /**
+     * Gets the catalyst items for this recipe type.
+     * @return List of item IDs that act as catalysts for this recipe type
+     */
+    default List<String> getCatalysts() {
+        return Collections.emptyList();
     }
 }

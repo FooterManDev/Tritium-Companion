@@ -32,6 +32,34 @@ public interface TRecipeComponent
     String getId();
 
     /**
+     * @return X coordinate on the recipe background texture.
+     */
+    default int x() {
+        return 0;
+    }
+
+    /**
+     * @return Y coordinate on the recipe background texture.
+     */
+    default int y() {
+        return 0;
+    }
+
+    /**
+     * @return Render width in pixels.
+     */
+    default int width() {
+        return 18;
+    }
+
+    /**
+     * @return Render height in pixels.
+     */
+    default int height() {
+        return 18;
+    }
+
+    /**
      * Gets additional data for this component.
      *
      * @return Map of component data

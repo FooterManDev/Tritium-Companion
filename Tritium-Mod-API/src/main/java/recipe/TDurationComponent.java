@@ -9,7 +9,7 @@ import java.util.Map;
 public interface TDurationComponent extends TRecipeComponent
 {
 
-    int getDuration();
+    int duration();
 
     @Override
     default String getCategory() {
@@ -24,7 +24,7 @@ public interface TDurationComponent extends TRecipeComponent
     @Override
     default Map<String, Object> getData() {
         Map<String, Object> data = new HashMap<>();
-        data.put("duration", getDuration());
+        data.put("duration", duration());
         return data;
     }
 }
