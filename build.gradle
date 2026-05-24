@@ -15,7 +15,9 @@ allprojects {
 
 ext {
     companionBundledLibraries = [
-            "org.java-websocket:Java-WebSocket:1.6.0"
+            "org.java-websocket:Java-WebSocket:1.6.0",
+            "io.github.tritium_launcher:tritium-mod-api:0.1.2",
+            "com.google.flatbuffers:flatbuffers-java:25.2.10"
     ]
 }
 
@@ -29,6 +31,21 @@ subprojects {
     }
 
     repositories {
+        mavenCentral()
+        maven {
+            url "https://maven.latvian.dev/releases"
+            content {
+                includeGroup "dev.latvian.mods"
+                includeGroup "dev.latvian.apps"
+            }
+        }
+
+        maven {
+            url 'https://jitpack.io'
+            content {
+                includeGroup "com.github.rtyley"
+            }
+        }
 
     }
 

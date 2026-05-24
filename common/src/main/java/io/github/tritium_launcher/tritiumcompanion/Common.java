@@ -1,4 +1,4 @@
-package io.github.footermandev.tritiumcompanion;
+package io.github.tritium_launcher.tritiumcompanion;
 
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
@@ -14,6 +14,7 @@ public final class Common
 
     public static void init() {
         if(!INITIALIZED.compareAndSet(false, true)) return;
+        TritiumBuiltinApi.registerAll();
         CompanionSocketBridge.init();
     }
 

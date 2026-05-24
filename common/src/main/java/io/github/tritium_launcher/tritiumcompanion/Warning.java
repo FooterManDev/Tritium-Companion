@@ -1,4 +1,4 @@
-package io.github.footermandev.tritiumcompanion;
+package io.github.tritium_launcher.tritiumcompanion;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;

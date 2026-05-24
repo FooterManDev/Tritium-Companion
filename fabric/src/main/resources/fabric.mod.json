@@ -16,10 +16,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "io.github.footermandev.tritiumcompanion.fabric.Fabric"
+      "io.github.tritium_launcher.tritiumcompanion.fabric.Fabric"
     ],
     "client": [
-      "io.github.footermandev.tritiumcompanion.fabric.FabricClient"
+      "io.github.tritium_launcher.tritiumcompanion.fabric.FabricClient"
     ]
   },
   "mixins": [

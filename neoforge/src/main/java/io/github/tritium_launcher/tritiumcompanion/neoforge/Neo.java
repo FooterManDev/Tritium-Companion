@@ -1,7 +1,7 @@
-package io.github.footermandev.tritiumcompanion.neoforge;
+package io.github.tritium_launcher.tritiumcompanion.neoforge;
 
-import io.github.footermandev.tritiumcompanion.Command;
-import io.github.footermandev.tritiumcompanion.Common;
+import io.github.tritium_launcher.tritiumcompanion.Command;
+import io.github.tritium_launcher.tritiumcompanion.Common;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -9,7 +9,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
-import static io.github.footermandev.tritiumcompanion.Common.MOD_ID;
+import static io.github.tritium_launcher.tritiumcompanion.Common.MOD_ID;
 
 @Mod(MOD_ID)
 public final class Neo

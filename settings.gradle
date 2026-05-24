@@ -12,3 +12,9 @@ rootProject.name = 'tritiumcompanion'
 include 'common'
 include 'fabric'
 include 'neoforge'
+
+includeBuild('Tritium-Mod-API') {
+    dependencySubstitution {
+        substitute module('io.github.tritium_launcher:tritium-mod-api') using project(':')
+    }
+}

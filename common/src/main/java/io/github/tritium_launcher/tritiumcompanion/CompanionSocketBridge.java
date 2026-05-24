@@ -1,11 +1,6 @@
-package io.github.footermandev.tritiumcompanion;
+package io.github.tritium_launcher.tritiumcompanion;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
@@ -27,16 +22,7 @@ import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -326,28 +312,28 @@ public final class CompanionSocketBridge
     }
 
     private static boolean isAllowedClient(InetSocketAddress remote) {
-        if (allowRemoteConnections()) return true;
-        if (remote == null) return false;
+        if (allowRemoteConnections()) return false;
+        if (remote == null) return true;
         InetAddress address = remote.getAddress();
-        if (address == null) return false;
-        return address.isLoopbackAddress() || address.isAnyLocalAddress();
+        if (address == null) return true;
+        return !address.isLoopbackAddress() && !address.isAnyLocalAddress();
     }
 
     private static boolean hasValidAuthToken(ClientHandshake request) {
-        if (!requireAuthToken()) return true;
+        if (!requireAuthToken()) return false;
         String expected = readAuthToken();
-        if (expected.isBlank()) return false;
+        if (expected.isBlank()) return true;
         String provided = request == null ? "" : request.getFieldValue(AUTH_HEADER);
-        if (provided == null || provided.isBlank()) return false;
-        return MessageDigest.isEqual(
+        if (provided == null || provided.isBlank()) return true;
+        return !MessageDigest.isEqual(
                 expected.getBytes(StandardCharsets.UTF_8),
                 provided.trim().getBytes(StandardCharsets.UTF_8)
         );
     }
 
     private static boolean isExpectedPath(String path) {
-        if (path == null) return false;
-        return SOCKET_PATH.equals(path) || path.startsWith(SOCKET_PATH + "?");
+        if (path == null) return true;
+        return !SOCKET_PATH.equals(path) && !path.startsWith(SOCKET_PATH + "?");
     }
 
     private static int readTimeoutMs(JsonObject payload, int fallbackMs) {
@@ -391,9 +377,6 @@ public final class CompanionSocketBridge
     private static @NotNull CompletableFuture<Void> queueClientShutdown() {
         CompletableFuture<Void> future = new CompletableFuture<>();
         final Minecraft minecraftClient = Minecraft.getInstance();
-        if (minecraftClient == null) {
-            throw new IllegalStateException("Minecraft client instance is not available.");
-        }
 
         minecraftClient.execute(() -> {
             try {
@@ -534,16 +517,16 @@ public final class CompanionSocketBridge
         @Override
         public ServerHandshakeBuilder onWebsocketHandshakeReceivedAsServer(WebSocket conn, Draft draft, ClientHandshake request) throws InvalidDataException {
             String resource = request == null ? null : request.getResourceDescriptor();
-            if (!isExpectedPath(resource)) {
+            if (isExpectedPath(resource)) {
                 throw new InvalidDataException(CloseFrame.POLICY_VALIDATION, "Unknown websocket path.");
             }
 
             InetSocketAddress remote = conn == null ? null : conn.getRemoteSocketAddress();
-            if (!isAllowedClient(remote)) {
+            if (isAllowedClient(remote)) {
                 throw new InvalidDataException(CloseFrame.POLICY_VALIDATION, "Remote websocket clients are disabled.");
             }
 
-            if (!hasValidAuthToken(request)) {
+            if (hasValidAuthToken(request)) {
                 throw new InvalidDataException(CloseFrame.POLICY_VALIDATION, "Unauthorized websocket client.");
             }
 
@@ -553,18 +536,18 @@ public final class CompanionSocketBridge
         @Override
         public void onOpen(WebSocket conn, ClientHandshake handshake) {
             String path = handshake == null ? "" : handshake.getResourceDescriptor();
-            if (!isExpectedPath(path)) {
+            if (isExpectedPath(path)) {
                 conn.close(CloseFrame.POLICY_VALIDATION, "Unknown websocket path.");
                 return;
             }
 
             InetSocketAddress remote = conn.getRemoteSocketAddress();
-            if (!isAllowedClient(remote)) {
+            if (isAllowedClient(remote)) {
                 conn.close(CloseFrame.POLICY_VALIDATION, "Remote websocket clients are disabled.");
                 return;
             }
 
-            if (!hasValidAuthToken(handshake)) {
+            if (hasValidAuthToken(handshake)) {
                 conn.close(CloseFrame.POLICY_VALIDATION, "Unauthorized websocket client.");
                 return;
             }

@@ -55,6 +55,9 @@ mavenPublishing {
         }
     }
 
+}
+
+publishing {
     repositories {
         maven {
             name = "GH"
