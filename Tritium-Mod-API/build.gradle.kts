@@ -34,7 +34,7 @@ mavenPublishing {
         name = "Tritium Mod API"
         description = "API for Tritium Launcher integration"
         inceptionYear = "2025"
-        url = "https://github.com/FooterManDev/Tritium-Companion"
+        url = "https://github.com/Tritium-Launcher/Tritium-Companion"
         licenses {
             license {
                 name = "MIT"
@@ -49,16 +49,16 @@ mavenPublishing {
             }
         }
         scm {
-            url = "https://github.com/FooterManDev/Tritium-Companion"
-            connection = "scm:git:git://github.com/FooterManDev/Tritium-Companion.git"
-            developerConnection = "scm:git:ssh://git@github.com/FooterManDev/Tritium-Companion.git"
+            url = "https://github.com/Tritium-Launcher/Tritium-Companion"
+            connection = "scm:git:git://github.com/Tritium-Launcher/Tritium-Companion.git"
+            developerConnection = "scm:git:ssh://git@github.com/Tritium-Launcher/Tritium-Companion.git"
         }
     }
 
     repositories {
         maven {
             name = "GH"
-            url = uri("https://maven.pkg.github.com/FooterManDev/Tritium-Companion")
+            url = uri("https://maven.pkg.github.com/Tritium-Launcher/Tritium-Companion")
             credentials {
                 username = findProperty("gpr.user") as String
                 password = findProperty("gpr.key")  as String
