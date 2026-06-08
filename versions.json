@@ -2,14 +2,8 @@
   "modVersion": "1.2.0",
   "supported": [
     {
-      "loader": "fabric",
       "mcVersion": "1.21.1",
-      "downloadUrl": "https://github.com/Tritium-Launcher/Tritium-Companion/releases/download/v1.2.0/tritiumcompanion-fabric-1.2.0.jar"
-    },
-    {
-      "loader": "neoforge",
-      "mcVersion": "1.21.1",
-      "downloadUrl": "https://github.com/Tritium-Launcher/Tritium-Companion/releases/download/v1.2.0/tritiumcompanion-neoforge-1.2.0.jar"
+      "loaders": ["fabric", "neoforge"]
     }
   ]
 }
