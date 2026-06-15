@@ -26,9 +26,9 @@ jobs:
 
       - name: Extract metadata
         run: |
-          V=$(sed -n 's/^mod_version=//p' gradle.properties)
-          MC=$(sed -n 's/^minecraft_version=//p' gradle.properties)
-          PL=$(sed -n 's/^enabled_platforms=//p' gradle.properties)
+          V=$(awk -F' = ' '/^mod_version/{print $2}' gradle.properties | tr -d ' ')
+          MC=$(awk -F' = ' '/^minecraft_version/{print $2}' gradle.properties | tr -d ' ')
+          PL=$(awk -F' = ' '/^enabled_platforms/{print $2}' gradle.properties | tr -d ' ')
           echo "VERSION=$V" >> $GITHUB_ENV
           echo "MC_VERSION=$MC" >> $GITHUB_ENV
           echo "PLATFORMS=$PL" >> $GITHUB_ENV
