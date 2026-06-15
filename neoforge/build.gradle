@@ -37,6 +37,7 @@ repositories {
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
+    modLocalRuntime "dev.latvian.mods:kubejs-neoforge:2101.7.2-build.368"
 
     bundledLibraries.each { dep ->
         implementation dep
