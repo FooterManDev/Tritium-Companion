@@ -57,14 +57,19 @@ mavenPublishing {
 
 }
 
+val gprUser: String? by project
+val gprKey: String? by project
+
 publishing {
     repositories {
-        maven {
-            name = "GH"
-            url = uri("https://maven.pkg.github.com/Tritium-Launcher/Tritium-Companion")
-            credentials {
-                username = findProperty("gpr.user") as String
-                password = findProperty("gpr.key")  as String
+        if (gprUser != null && gprKey != null) {
+            maven {
+                name = "GH"
+                url = uri("https://maven.pkg.github.com/Tritium-Launcher/Tritium-Companion")
+                credentials {
+                    username = gprUser
+                    password = gprKey
+                }
             }
         }
     }
