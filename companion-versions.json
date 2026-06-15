@@ -1,1 +1,25 @@
-{"schema":1,"entries":[]}
+{
+  "schema": 1,
+  "entries": [
+    {
+      "mcVersion": "1.21.1",
+      "loaders": [
+        "fabric",
+        "neoforge"
+      ],
+      "modVersion": "1.2.0",
+      "jars": {
+        "fabric": {
+          "url": "https://github.com/Tritium-Launcher/Tritium-Companion/releases/download/v1.2.0+mc1.21.1/tritiumcompanion-fabric-1.2.0.jar",
+          "sha256": "d05c6db2d9ae81e58e6a1eff057416c931f289c52b66476e82972291a57f5064",
+          "fileName": "tritiumcompanion-fabric-1.2.0.jar"
+        },
+        "neoforge": {
+          "url": "https://github.com/Tritium-Launcher/Tritium-Companion/releases/download/v1.2.0+mc1.21.1/tritiumcompanion-neoforge-1.2.0.jar",
+          "sha256": "97c2d88cc438dfd0647146e7f06e9af0951c664bcb0b48371ec0cd75ea20a09f",
+          "fileName": "tritiumcompanion-neoforge-1.2.0.jar"
+        }
+      }
+    }
+  ]
+}
