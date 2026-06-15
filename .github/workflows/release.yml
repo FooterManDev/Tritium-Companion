@@ -1,3 +1,4 @@
+---
 name: Build and Release
 
 on:
@@ -23,15 +24,41 @@ jobs:
       - name: Build
         run: ./gradlew build
 
-      - name: Extract version
-        run: echo "VERSION=$(grep '^mod_version' gradle.properties | cut -d'=' -f2 | tr -d ' ')" >> $GITHUB_ENV
+      - name: Extract metadata
+        run: |
+          V=$(sed -n 's/^mod_version=//p' gradle.properties)
+          MC=$(sed -n 's/^minecraft_version=//p' gradle.properties)
+          PL=$(sed -n 's/^enabled_platforms=//p' gradle.properties)
+          echo "VERSION=$V" >> $GITHUB_ENV
+          echo "MC_VERSION=$MC" >> $GITHUB_ENV
+          echo "PLATFORMS=$PL" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v${V}+mc${MC}" >> $GITHUB_ENV
 
       - name: Create Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v${{ env.VERSION }} \
-            --title "v${{ env.VERSION }}" \
+          gh release create "${{ env.RELEASE_TAG }}" \
+            --title "v${{ env.VERSION }} for MC ${{ env.MC_VERSION }}" \
             --generate-notes \
             fabric/build/libs/tritiumcompanion-fabric-${{ env.VERSION }}.jar \
             neoforge/build/libs/tritiumcompanion-neoforge-${{ env.VERSION }}.jar
+
+      - name: Fetch existing manifest from gh-pages
+        run: |
+          git fetch origin gh-pages 2>/dev/null || true
+          if git rev-parse origin/gh-pages >/dev/null 2>&1; then
+            git show origin/gh-pages:companion-versions.json \
+              > companion-versions.json 2>/dev/null || true
+          fi
+
+      - name: Build companion-versions.json
+        run: python3 .github/scripts/build-manifest.py
+
+      - name: Deploy companion-versions.json to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./manifest-build
+          publish_branch: gh-pages
+          keep_files: false
