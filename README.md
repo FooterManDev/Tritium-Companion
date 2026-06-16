@@ -1,3 +1,6 @@
+<img width="128" height="128" alt="icon" src="https://github.com/user-attachments/assets/652c3ef6-3b42-4fbf-a746-ae79c50857a0" />
+
+
 ### Tritium Companion is a multi-platform mod designed to provide game data to Tritium for ModPack Developers.
 
 Features:
