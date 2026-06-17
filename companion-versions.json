@@ -1,5 +1,13 @@
 {
   "schema": 1,
+  "project": {
+    "title": "Companion Mod",
+    "summary": "Provides helpful utilities for ModPack Developers",
+    "descriptionUrl": "https://raw.githubusercontent.com/Tritium-Launcher/Tritium-Companion/gh-pages/README.md",
+    "iconUrl": "https://raw.githubusercontent.com/Tritium-Launcher/Tritium-Companion/gh-pages/icon.png",
+    "author": "Tritium Launcher",
+    "website": "https://github.com/Tritium-Launcher/Tritium-Companion"
+  },
   "entries": [
     {
       "mcVersion": "1.21.1",
