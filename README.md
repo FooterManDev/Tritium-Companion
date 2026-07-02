@@ -20,3 +20,7 @@ This is nowhere near ready enough for general use.
 
 Current features:
 * Provide Recipe Type descriptors for the Recipe Viewer in Tritium.
+
+---
+
+Copyright (c) 2025 FooterMan and contributors. Licensed under the [GNU Affero General Public License v3.0](LICENSE).
