@@ -1,4 +1,4 @@
-package io.github.tritium_launcher.tritiumcompanion;
+package io.github.tritium_launcher.tritiumcompanion.neoforge;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import dev.latvian.mods.kubejs.KubeJS;
@@ -19,6 +19,7 @@ import dev.latvian.mods.rhino.NativeJavaObject;
 import dev.latvian.mods.rhino.Scriptable;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import dev.latvian.mods.rhino.util.ReturnsSelf;
+import io.github.tritium_launcher.tritiumcompanion.TCompanion;
 import io.github.tritium_launcher.tritiumcompanion.kubejs.*;
 import io.github.tritium_launcher.tritiumcompanion.kubejs.Constructor;
 import io.github.tritium_launcher.tritiumcompanion.kubejs.Field;
@@ -42,7 +43,7 @@ public class KubeJSDumper {
     public static void dump(MinecraftServer server, Path outputDir) {
         if (!isKubeJSLoaded()) return;
 
-        Common.LOGGER.info("Dumping KubeJS typings...");
+        TCompanion.LOGGER.info("Dumping KubeJS typings...");
         try {
             FlatBufferBuilder builder = new FlatBufferBuilder(1024 * 1024);
 
@@ -64,6 +65,7 @@ public class KubeJSDumper {
             }
 
             discoverEventClasses(discoveredClasses);
+            List<Integer> recipeSchemaOffsets = new ArrayList<>(dumpRecipeSchemas(builder, server, discoveredClasses));
 
             for (Map.Entry<String, Class<?>> entry : discoveredClasses.entrySet()) {
                 if (classOffsets.size() >= MAX_CLASSES) break;
@@ -77,7 +79,7 @@ public class KubeJSDumper {
             int bindingsVec = KubeTypings.createBindingsVector(builder, toIntArray(bindingOffsets));
             int classesVec = KubeTypings.createClassesVector(builder, toIntArray(classOffsets));
             int eventsVec = KubeTypings.createEventsVector(builder, toIntArray(dumpEvents(builder)));
-            int recipesVec = KubeTypings.createRecipesVector(builder, toIntArray(dumpRecipeSchemas(builder, server)));
+            int recipesVec = KubeTypings.createRecipesVector(builder, toIntArray(recipeSchemaOffsets));
 
             KubeTypings.startKubeTypings(builder);
             KubeTypings.addMinecraftVersion(builder, mcVersion);
@@ -94,10 +96,10 @@ public class KubeJSDumper {
             buf.get(bytes);
 
             Files.write(outputDir.resolve("typings.fb"), bytes);
-            Common.LOGGER.info("KubeJS typings dumped ({} bindings, {} classes, {} events, {} recipes, {} bytes)",
+            TCompanion.LOGGER.info("KubeJS typings dumped ({} bindings, {} classes, {} events, {} recipes, {} bytes)",
                 bindingOffsets.size(), classOffsets.size(), 0, 0, bytes.length);
-        } catch (Exception e) {
-            Common.LOGGER.error("Failed to dump KubeJS typings", e);
+        } catch (Exception | LinkageError e) {
+            TCompanion.LOGGER.error("Failed to dump KubeJS typings", e);
         }
     }
 
@@ -113,8 +115,8 @@ public class KubeJSDumper {
                     addTypeHierarchy(eventClass, discoveredClasses);
                 }
             }
-        } catch (Exception e) {
-            Common.LOGGER.warn("Failed to discover event classes: {}", e.getMessage());
+        } catch (Exception | LinkageError e) {
+            TCompanion.LOGGER.warn("Failed to discover event classes: {}", e.getMessage());
         }
     }
 
@@ -143,10 +145,22 @@ public class KubeJSDumper {
 
         if (isStdlibPackage(name)) return;
 
+        Class<?>[] interfaces;
+        try {
+            Class<?> superclass = clazz.getSuperclass();
+            if (superclass != null) addTypeHierarchy(superclass, discoveredClasses);
+            interfaces = clazz.getInterfaces();
+            for (Class<?> iface : interfaces) {
+                addTypeHierarchy(iface, discoveredClasses);
+            }
+        } catch (Exception | LinkageError ignored) {
+
+        }
+
         java.lang.reflect.Method[] declaredMethods;
         try {
             declaredMethods = clazz.getDeclaredMethods();
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             return;
         }
         for (java.lang.reflect.Method m : declaredMethods) {
@@ -156,7 +170,8 @@ public class KubeJSDumper {
                 for (java.lang.reflect.Type pt : m.getGenericParameterTypes()) {
                     addTypeFromSignature(pt, discoveredClasses);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception | LinkageError ignored) {
+
             }
         }
     }
@@ -241,8 +256,8 @@ public class KubeJSDumper {
                 addBinding(bindingOffsets, builder, name, className, doc, side);
                 discoveredClasses.putIfAbsent(className, valueClass);
             }
-        } catch (Exception e) {
-            Common.LOGGER.warn("Failed to enumerate {} bindings: {}", side, e.getMessage());
+        } catch (Exception | LinkageError e) {
+            TCompanion.LOGGER.warn("Failed to enumerate {} bindings: {}", side, e.getMessage());
         }
     }
 
@@ -390,13 +405,14 @@ public class KubeJSDumper {
                     }
                 }
             }
-        } catch (Exception e) {
-            Common.LOGGER.warn("Failed to dump events: {}", e.getMessage());
+        } catch (Exception | LinkageError e) {
+            TCompanion.LOGGER.warn("Failed to dump events: {}", e.getMessage());
         }
         return offsets;
     }
 
-    private static List<Integer> dumpRecipeSchemas(FlatBufferBuilder builder, MinecraftServer server) {
+    private static List<Integer> dumpRecipeSchemas(FlatBufferBuilder builder, MinecraftServer server,
+                                                    LinkedHashMap<String, Class<?>> discoveredClasses) {
         List<Integer> offsets = new ArrayList<>();
         try {
             if (server == null) return offsets;
@@ -433,6 +449,13 @@ public class KubeJSDumper {
                     String recipeClass = schema.recipeFactory != null && schema.recipeFactory.recipeType() != null
                         ? schema.recipeFactory.recipeType().toString() : "";
 
+                    if (!recipeClass.isEmpty() && discoveredClasses.size() < MAX_CLASSES) {
+                        try {
+                            Class<?> recipeClassObj = Class.forName(recipeClass, false, KubeJSDumper.class.getClassLoader());
+                            addTypeHierarchy(recipeClassObj, discoveredClasses);
+                        } catch (Exception ignored) {}
+                    }
+
                     List<Integer> keyOffsets = new ArrayList<>();
                     for (RecipeKey<?> key : schema.keys) {
                         if (key.excluded) continue;
@@ -455,8 +478,8 @@ public class KubeJSDumper {
                     offsets.add(RecipeSchemaBinding.createRecipeSchemaBinding(builder, ns, si, rc, kv, dc));
                 }
             }
-        } catch (Exception e) {
-            Common.LOGGER.warn("Failed to dump recipe schemas: {}", e.getMessage());
+        } catch (Exception | LinkageError e) {
+            TCompanion.LOGGER.warn("Failed to dump recipe schemas: {}", e.getMessage());
         }
         return offsets;
     }
@@ -584,8 +607,8 @@ public class KubeJSDumper {
                 doc,
                 builder.createString(superClass),
                 ivo));
-        } catch (Exception e) {
-            Common.LOGGER.warn("Failed to reflect {}: {}", clazz.getName(), e.getMessage());
+        } catch (Exception | LinkageError e) {
+            TCompanion.LOGGER.warn("Failed to reflect {}: {}", clazz.getName(), e.getMessage());
         }
     }
 

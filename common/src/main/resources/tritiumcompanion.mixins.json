@@ -1,9 +1,14 @@
 {
   "required": true,
-  "package": "io.github.tritium_launcher.mixin",
+  "package": "io.github.tritium_launcher.tritiumcompanion.mixin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
+    "OptionsMixin",
+    "MinecraftMixin",
+    "TooltipAccessor",
+    "OptionInstanceAccessor",
+    "SliderableValueSetAccessor"
   ],
   "mixins": [
   ],

@@ -26,6 +26,12 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.ParseResults;
+import com.mojang.brigadier.suggestion.Suggestion;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.Message;
+import io.github.tritium_launcher.tritiumcompanion.client.options.OptionsExporter;
 
 /**
  * Companion websocket bridge exposed by the mod for Tritium.
@@ -40,6 +46,8 @@ public final class CompanionSocketBridge
     private static final int DEFAULT_PORT = 38765;
     private static final int DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
     private static final int DEFAULT_RELOAD_TIMEOUT_MS = 10 * 60 * 1000;
+    private static final int LEVEL_WAIT_TIMEOUT_MS = 2 * 60 * 1000;
+    private static final int LEVEL_WAIT_POLL_MS = 200;
     private static final int MIN_COMMAND_TIMEOUT_MS = 1_000;
     private static final int MAX_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
     private static final String DEFAULT_BIND_HOST = "127.0.0.1";
@@ -57,9 +65,21 @@ public final class CompanionSocketBridge
     private static final AtomicBoolean START_RETRY_SCHEDULED = new AtomicBoolean(false);
     private static final AtomicInteger START_RETRY_COUNT = new AtomicInteger(0);
     private static final AtomicInteger REQUEST_THREAD_COUNTER = new AtomicInteger(1);
+    private static final AtomicInteger ICON_THREAD_COUNTER = new AtomicInteger(1);
     private static final ExecutorService REQUEST_EXECUTOR = Executors.newFixedThreadPool(
             Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
             daemonThreadFactory("tritium-companion-ws-request-", REQUEST_THREAD_COUNTER)
+    );
+    /**
+     * Single daemon thread that drives icon rendering. Icon GL work itself always runs on the
+     * game's render thread (RegistryIconRenderer uses {@code RenderSystem.recordRenderCall}); this
+     * thread is the *orchestrator* that submits those render calls and blocks on
+     * {@code future.join()} per batch. Running it here — off the server thread — lets the icon
+     * phase overlap with the data dumpers (which stay on the server thread) and, crucially, lets
+     * the server keep ticking during the whole dump.
+     */
+    static final ExecutorService ICON_EXECUTOR = Executors.newSingleThreadExecutor(
+            daemonThreadFactory("tritium-companion-icon-", ICON_THREAD_COUNTER)
     );
     private static final ScheduledExecutorService RETRY_EXECUTOR = Executors.newSingleThreadScheduledExecutor(
             daemonThreadFactory("tritium-companion-ws-retry-", new AtomicInteger(1))
@@ -91,11 +111,25 @@ public final class CompanionSocketBridge
         String normalizedAction = normalizeAction(action);
         HANDLERS.put(normalizedAction, handler);
     }
+    /**
+     * Broadcasts a JSON message to all connected websocket clients.
+     */
+    public static void broadcast(JsonObject message) {
+        BridgeServer server = SERVER.get();
+        if (server != null) {
+            String json = GSON.toJson(message);
+            for (WebSocket conn : server.getConnections()) {
+                if (conn != null && conn.isOpen()) {
+                    conn.send(json);
+                }
+            }
+        }
+    }
 
     private static void registerBuiltinHandlers() {
         registerHandler("ping", payload -> {
             JsonObject data = new JsonObject();
-            data.addProperty("modId", Common.MOD_ID);
+            data.addProperty("modId", TCompanion.MOD_ID);
             data.addProperty("protocolVersion", 1);
             data.addProperty("serverActive", ACTIVE_SERVER.get() != null);
             data.addProperty("socketPort", readPort());
@@ -105,18 +139,207 @@ public final class CompanionSocketBridge
         registerHandler("execute_command", payload -> {
             String command = requireText(payload, "command");
             int timeoutMs = readTimeoutMs(payload, DEFAULT_COMMAND_TIMEOUT_MS);
+            if (command.equalsIgnoreCase("dumpRegistry")) {
+                TritiumBuiltinApi.registerAll();
+                awaitLevelLoadedIfNeeded(RegistryDumper.DumpScope.FULL);
+            }
             return runServerCommand(command, timeoutMs);
+        });
+
+        registerHandler("dump_registry", payload -> {
+            RegistryDumper.DumpScope scope = RegistryDumper.DumpScope.parse(payload);
+            int timeoutMs = readTimeoutMs(payload, DEFAULT_COMMAND_TIMEOUT_MS);
+            awaitLevelLoadedIfNeeded(scope);
+            return runScopedDump(scope, timeoutMs);
         });
 
         registerHandler("reload_server", payload -> {
             int timeoutMs = readTimeoutMs(payload, DEFAULT_RELOAD_TIMEOUT_MS);
-            return runServerCommand("reload", timeoutMs);
+            JsonObject result = runServerCommand("reload", timeoutMs);
+            JsonObject reloaded = new JsonObject();
+            reloaded.addProperty("action", "server_reloaded");
+            broadcast(reloaded);
+            return result;
         });
 
         registerHandler("close_game", payload -> {
             int timeoutMs = readTimeoutMs(payload, DEFAULT_COMMAND_TIMEOUT_MS);
             return closeGame(timeoutMs);
         });
+
+        registerHandler("get_options", payload -> {
+            Minecraft mc = Minecraft.getInstance();
+            CompletableFuture<JsonObject> future = new CompletableFuture<>();
+            mc.execute(() -> {
+                try {
+                    future.complete(OptionsExporter.buildExport());
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+            try {
+                return future.get(10, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+                throw new RuntimeException("Failed to export options", cause != null ? cause : e);
+            }
+        });
+
+        registerHandler("command_suggestions", payload -> {
+            String origInput = requireText(payload, "input");
+            int origCursor = optInt(payload, "cursor", origInput.length());
+            String input = origInput;
+            int cursor = origCursor;
+
+            if (input.startsWith("/")) {
+                input = input.substring(1);
+                if (cursor > 0) cursor--;
+            }
+
+            if (cursor > input.length()) {
+                TCompanion.LOGGER.warn("command_suggestions clamped cursor {} -> {} for input len {} (orig input='{}' cursor={})",
+                    cursor, input.length(), input.length(), origInput, origCursor);
+                cursor = input.length();
+            }
+
+            MinecraftServer server = ACTIVE_SERVER.get();
+            if (server == null) {
+                throw new IllegalStateException("No active Minecraft server.");
+            }
+
+            CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
+            CommandSourceStack source = server.createCommandSourceStack().withPermission(4);
+            ParseResults<CommandSourceStack> parse = dispatcher.parse(input, source);
+            Suggestions suggestions = dispatcher.getCompletionSuggestions(parse, cursor)
+                .get(5_000, TimeUnit.MILLISECONDS);
+
+            JsonObject data = new JsonObject();
+            JsonArray list = new JsonArray();
+            for (Suggestion s : suggestions.getList()) {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("text", s.getText());
+                entry.addProperty("start", s.getRange().getStart());
+                entry.addProperty("length", s.getRange().getLength());
+                Message tooltip = s.getTooltip();
+                if (tooltip != null) {
+                    entry.addProperty("tooltip", tooltip.getString());
+                }
+                list.add(entry);
+            }
+            data.add("suggestions", list);
+            return data;
+        });
+    }
+
+    /**
+     * Defer an icon-rendering dump until the client level has loaded. Icon rendering
+     * (RegistryIconRenderer) requires {@code Minecraft.getInstance().level}; if a dump is
+     * requested during world-load (before the player joins), it would otherwise publish an
+     * empty icon set.
+     *
+     * <p>This MUST run on the {@code REQUEST_EXECUTOR} thread (a ws request handler), never
+     * the server thread. While this thread sleeps, the server thread keeps ticking, so the
+     * client can finish joining and create {@code mc.level}. Blocking the server thread
+     * instead would deadlock (the client can only complete its join when the server ticks).
+     *
+     * <p>{@code section} scopes (recipes+tags only) never render icons, so they are not gated.
+     * If a level still does not appear within {@link #LEVEL_WAIT_TIMEOUT_MS}, we proceed anyway
+     * and the icon phase will be skipped gracefully (the launcher treats the dump as complete).
+     */
+    private static void awaitLevelLoadedIfNeeded(RegistryDumper.DumpScope scope) {
+        if (scope != null && scope.getType().equals("section")) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level != null) {
+            return;
+        }
+        TCompanion.LOGGER.info("Registry dump requested before a level was loaded; deferring until the client joins the world...");
+        long deadline = System.currentTimeMillis() + LEVEL_WAIT_TIMEOUT_MS;
+        while (mc.level == null && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(LEVEL_WAIT_POLL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                TCompanion.LOGGER.warn("Interrupted while waiting for a level to load; proceeding with dump (icons may be skipped).");
+                return;
+            }
+        }
+        if (mc.level == null) {
+            TCompanion.LOGGER.warn("No level loaded after {} ms; proceeding with dump without icons.", LEVEL_WAIT_TIMEOUT_MS);
+        } else {
+            TCompanion.LOGGER.info("Level loaded; proceeding with registry dump.");
+        }
+    }
+
+    /**
+     * Triggers a client resource reload so {@code Minecraft.getInstance().getResourceManager()}
+     * serves freshly-edited pack bytes (textures/models) instead of the cached copies.
+     *
+     * <p>This MUST run on the client thread. {@code reloadResourcePacks()} is dispatched onto it
+     * and the returned future is awaited on the {@code REQUEST_EXECUTOR} thread so the subsequent
+     * textures dump reads fresh bytes. We never block the server thread.
+     */
+    private static void reloadClientResources() throws Exception {
+        Minecraft mc = Minecraft.getInstance();
+        CompletableFuture<Void> reload = new CompletableFuture<>();
+        mc.execute(() -> {
+            try {
+                mc.reloadResourcePacks().whenComplete((v, t) -> {
+                    if (t != null) reload.completeExceptionally(t);
+                    else reload.complete(v);
+                });
+            } catch (Throwable t) {
+                reload.completeExceptionally(t);
+            }
+        });
+        try {
+            reload.get();
+        } catch (ExecutionException e) {
+            throw new Exception("Failed to reload client resources for textures dump", e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        }
+        TCompanion.LOGGER.info("Client resources reloaded for textures-scoped dump.");
+    }
+
+    private static JsonObject runScopedDump(RegistryDumper.DumpScope scope, int timeoutMs) throws Exception {
+        int boundedTimeoutMs = clampTimeoutMs(timeoutMs);
+        MinecraftServer server = ACTIVE_SERVER.get();
+        if (server == null) {
+            throw new IllegalStateException("No active Minecraft server. Load into a world first.");
+        }
+
+        if (scope.getType().equals("textures")) {
+            reloadClientResources();
+        }
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        server.execute(() -> {
+            try {
+                CommandSourceStack source = server.createCommandSourceStack().withPermission(4);
+                Command.runScopedDump(server, source, scope);
+                future.complete(null);
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+
+        try {
+            future.get(boundedTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw new IllegalStateException("Timed out waiting for scoped registry dump after " + boundedTimeoutMs + "ms.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        }
+
+        JsonObject data = new JsonObject();
+        data.addProperty("scope", scope.getType());
+        data.addProperty("timeoutMs", boundedTimeoutMs);
+        return data;
     }
 
     private static JsonObject runServerCommand(String rawCommand, int timeoutMs) throws Exception {
@@ -167,7 +390,7 @@ public final class CompanionSocketBridge
                 runServerFlushSave(server, boundedTimeoutMs);
                 data.addProperty("serverSaveAttempted", true);
             } catch (Throwable t) {
-                Common.LOGGER.error("Server save failed before shutdown; aborting client exit", t);
+                TCompanion.LOGGER.error("Server save failed before shutdown; aborting client exit", t);
                 throw new IllegalStateException("Server save failed before shutdown.", t);
             }
         } else {
@@ -242,7 +465,7 @@ public final class CompanionSocketBridge
     private static void scheduleStartupRetry(String bindHost, int port, Throwable t) {
         int attempt = START_RETRY_COUNT.incrementAndGet();
         long delayMs = computeRetryDelayMs(attempt);
-        Common.LOGGER.warn(
+        TCompanion.LOGGER.warn(
                 "Failed to start companion websocket bridge on ws://{}:{}{} (attempt {}). Retrying in {}ms.",
                 bindHost,
                 port,
@@ -270,6 +493,7 @@ public final class CompanionSocketBridge
             }
             REQUEST_EXECUTOR.shutdownNow();
             RETRY_EXECUTOR.shutdownNow();
+            ICON_EXECUTOR.shutdownNow();
         }, "tritium-companion-ws-shutdown"));
     }
 
@@ -279,12 +503,12 @@ public final class CompanionSocketBridge
         try {
             parsed = Integer.parseInt(raw);
         } catch (NumberFormatException ignored) {
-            Common.LOGGER.warn("Invalid tritium.companion.ws.port '{}'. Falling back to {}.", raw, DEFAULT_PORT);
+            TCompanion.LOGGER.warn("Invalid tritium.companion.ws.port '{}'. Falling back to {}.", raw, DEFAULT_PORT);
             return DEFAULT_PORT;
         }
 
         if (parsed < 1 || parsed > 65535) {
-            Common.LOGGER.warn("Out-of-range tritium.companion.ws.port '{}'. Falling back to {}.", raw, DEFAULT_PORT);
+            TCompanion.LOGGER.warn("Out-of-range tritium.companion.ws.port '{}'. Falling back to {}.", raw, DEFAULT_PORT);
             return DEFAULT_PORT;
         }
         return parsed;
@@ -408,7 +632,7 @@ public final class CompanionSocketBridge
             JsonObject data = handler.handle(payload);
             return successResponse(requestId, "ok", data);
         } catch (Throwable t) {
-            Common.LOGGER.warn("Websocket action '{}' failed", actionName, t);
+            TCompanion.LOGGER.warn("Websocket action '{}' failed", actionName, t);
             String msg = t.getMessage();
             if (msg == null || msg.isBlank()) msg = "Request failed.";
             return errorResponse(requestId, msg);
@@ -471,6 +695,17 @@ public final class CompanionSocketBridge
         return element.getAsString();
     }
 
+    private static int optInt(JsonObject object, String key, int fallback) {
+        if (object == null || key == null || !object.has(key)) return fallback;
+        JsonElement element = object.get(key);
+        if (element == null || !element.isJsonPrimitive()) return fallback;
+        try {
+            return element.getAsJsonPrimitive().getAsInt();
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
     private static ThreadFactory daemonThreadFactory(String prefix, AtomicInteger counter) {
         return runnable -> {
             Thread thread = new Thread(runnable, prefix + counter.getAndIncrement());
@@ -510,7 +745,7 @@ public final class CompanionSocketBridge
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (Throwable t) {
-                Common.LOGGER.warn("Failed to stop companion websocket cleanly", t);
+                TCompanion.LOGGER.warn("Failed to stop companion websocket cleanly", t);
             }
         }
 
@@ -552,12 +787,12 @@ public final class CompanionSocketBridge
                 return;
             }
 
-            Common.LOGGER.debug("Companion websocket client connected: {}", remote);
+            TCompanion.LOGGER.debug("Companion websocket client connected: {}", remote);
         }
 
         @Override
         public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-            Common.LOGGER.debug(
+            TCompanion.LOGGER.debug(
                     "Companion websocket client disconnected: {} (code={}, reason='{}', remote={})",
                     safeRemote(conn),
                     code,
@@ -590,7 +825,7 @@ public final class CompanionSocketBridge
                 sendResponse(conn, errorResponse("", "Invalid JSON payload."));
                 return;
             } catch (Throwable t) {
-                Common.LOGGER.warn("Unexpected websocket bridge error", t);
+                TCompanion.LOGGER.warn("Unexpected websocket bridge error", t);
                 sendResponse(conn, errorResponse("", "Unexpected server error."));
                 return;
             }
@@ -601,7 +836,7 @@ public final class CompanionSocketBridge
                     try {
                         response = handleRequest(request);
                     } catch (Throwable t) {
-                        Common.LOGGER.warn("Unexpected websocket bridge error", t);
+                        TCompanion.LOGGER.warn("Unexpected websocket bridge error", t);
                         response = errorResponse("", "Unexpected server error.");
                     }
                     sendResponse(conn, response);
@@ -625,12 +860,12 @@ public final class CompanionSocketBridge
                         scheduleStartupRetry(bindHost, port, ex);
                     }
                 } else {
-                    Common.LOGGER.warn("Companion websocket server error", ex);
+                    TCompanion.LOGGER.warn("Companion websocket server error", ex);
                 }
                 return;
             }
 
-            Common.LOGGER.warn("Companion websocket connection error for {}", safeRemote(conn), ex);
+            TCompanion.LOGGER.warn("Companion websocket connection error for {}", safeRemote(conn), ex);
         }
 
         @Override
@@ -640,9 +875,9 @@ public final class CompanionSocketBridge
             START_RETRY_COUNT.set(0);
             START_RETRY_SCHEDULED.set(false);
             if (requireAuthToken() && readAuthToken().isBlank()) {
-                Common.LOGGER.warn("Companion websocket token auth is enabled but no token is configured. All clients will be rejected.");
+                TCompanion.LOGGER.warn("Companion websocket token auth is enabled but no token is configured. All clients will be rejected.");
             }
-            Common.LOGGER.info("Companion websocket listening on ws://{}:{}{}", bindHost, port, SOCKET_PATH);
+            TCompanion.LOGGER.info("Companion websocket listening on ws://{}:{}{}", bindHost, port, SOCKET_PATH);
         }
 
         private void sendResponse(WebSocket conn, JsonObject response) {
@@ -651,7 +886,7 @@ public final class CompanionSocketBridge
             try {
                 conn.send(GSON.toJson(response));
             } catch (Throwable t) {
-                Common.LOGGER.warn("Failed to send websocket response to {}", safeRemote(conn), t);
+                TCompanion.LOGGER.warn("Failed to send websocket response to {}", safeRemote(conn), t);
             }
         }
 

@@ -7,7 +7,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'tritiumcompanion'
+rootProject.name = 'Tritium Companion Mod'
 
 include 'common'
 include 'fabric'

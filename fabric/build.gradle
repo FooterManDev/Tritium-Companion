@@ -28,11 +28,25 @@ configurations {
     }
 }
 
+repositories {
+    maven {
+        name = 'Shedaniel'
+        url = 'https://maven.shedaniel.me/'
+    }
+    maven {
+        name = 'Terraformers'
+        url = 'https://maven.terraformersmc.com/releases/'
+    }
+}
+
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
+
+    modLocalRuntime "me.shedaniel:RoughlyEnoughItems-fabric:16.0.799"
+    modLocalRuntime "com.terraformersmc:modmenu:11.0.4"
 
     bundledLibraries.each { dep ->
         implementation dep

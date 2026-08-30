@@ -33,11 +33,22 @@ repositories {
         name = 'NeoForged'
         url = 'https://maven.neoforged.net/releases'
     }
+    maven {
+        name = 'Shedaniel'
+        url = 'https://maven.shedaniel.me/'
+    }
 }
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
-    modLocalRuntime "dev.latvian.mods:kubejs-neoforge:2101.7.2-build.368"
+    modCompileOnly "dev.latvian.mods:kubejs-neoforge:2101.7.2-build.367"
+    modLocalRuntime "dev.latvian.mods:kubejs-neoforge:2101.7.2-build.367"
+
+    implementation "dev.latvian.apps:tiny-java-server:1.0.0-build.33"
+    runtimeOnly "dev.latvian.apps:tiny-java-server:1.0.0-build.33"
+    forgeRuntimeLibrary "dev.latvian.apps:tiny-java-server:1.0.0-build.33"
+
+    modLocalRuntime "me.shedaniel:RoughlyEnoughItems-neoforge:16.0.799"
 
     bundledLibraries.each { dep ->
         implementation dep
